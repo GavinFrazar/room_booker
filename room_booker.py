@@ -25,7 +25,7 @@ UCSB_ADD = "@umail.ucsb.edu"
 FORTNIGHT = 14
 IMTP_ADD = "outlook.office365.com"
 IMTP_PORT = 993
-HARDCODED_DRIVER_LOCATION = '/Users/Rod/Downloads/chromedriver'
+HARDCODED_DRIVER_LOCATION = '*****'
 
 #enters if file does not already exist and prompts user to enter necessary info to run program
 if (os.path.isfile('library_room.txt') == False):
@@ -131,15 +131,15 @@ for k in range(5):
 	#on Dec 30 2017 which is the day of reference. From here it is simply
 	#a matter of adding a multiple that was determined to be 816
 	if timeframe == 11:
-		numdiff = 600893787
+		numdiff = 600893789
 	elif timeframe == 1:
-		numdiff = 600893791
+		numdiff = 600893793
 	elif timeframe == 3:
-		numdiff = 600893795
+		numdiff = 600893797
 	elif timeframe == 5:
-		numdiff = 600893799
+		numdiff = 600893801
 	elif timeframe == 7:
-		numdiff = 600893803
+		numdiff = 600893805
 	else:
 		raise ValueError('a proper timeframe was not read from the file')
 	
@@ -237,13 +237,32 @@ for k in range(5):
 	time.sleep(0.7)
 	sub_booking.click()
 
-	#wait for the booking to send an email and then execute the following code
-	#after 5 minutes 
-	print "Waiting 2 minutes to ensure that confirmation email is sent and then accessing it..." 
-	time.sleep(120)
-	
+#wait for the booking to send an email and then execute the following code
+#after 5 minutes 
+f.close()
+print "Waiting 2 minutes to ensure that confirmation email is sent and then accessing it..." 
+time.sleep(120)
 
 
+#opens file with necessary information		
+f = open('library_room.txt', 'r')
+
+for k in range(5):
+	#reads first line which determines times to book (need to get rid of '\n' character)
+	timeframe = f.readline()
+	timeframe = int(timeframe.rstrip('\n'))
+
+	#reads second line which is the Net ID (need to get rid of '\n' character)
+	login_id_noadd = f.readline()
+	login_id_noadd = login_id_noadd.rstrip('\n')
+
+	#reads third line which is the users login password (need to get rid of '\n' character)
+	login_pwd = f.readline()
+	login_pwd = login_pwd.rstrip('\n')
+
+
+	#set the login id for the logging into email
+	email_login_id = login_id_noadd + UCSB_ADD
 	try:
 		#open up a mail session with our IMTP_ADD and login then look at inbox
 		mail = imaplib.IMAP4_SSL(IMTP_ADD)
