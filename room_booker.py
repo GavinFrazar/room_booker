@@ -17,7 +17,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import smtplib
 import re
-import urllib2
 import imaplib
 import email
 
@@ -25,45 +24,48 @@ UCSB_ADD = "@umail.ucsb.edu"
 FORTNIGHT = 14
 IMTP_ADD = "outlook.office365.com"
 IMTP_PORT = 993
-HARDCODED_DRIVER_LOCATION = '*****'
+HARDCODED_DRIVER_LOCATION = 'C:\\Users\\Gavin\\Desktop\\chromedriver.exe'
+
+# -- change this to the number of people whose credentials will be used --
+NUM_USERS = 1
 
 #enters if file does not already exist and prompts user to enter necessary info to run program
 if (os.path.isfile('library_room.txt') == False):
     f = open('library_room.txt', 'w')
-    for k in range(5):
+    for k in range(NUM_USERS):
     
-        timeframe = raw_input("Please enter\n11 to book 11-1\n1 to book 1-3\n 3 to book 3-5\n 5 to book 5-7\n or 7 to book 7-9\n")
-        timeframe_check = raw_input("Please enter the number again to confirm: ")
+        timeframe = input("Please enter\n11 to book 11-1\n1 to book 1-3\n 3 to book 3-5\n 5 to book 5-7\n or 7 to book 7-9\n")
+        timeframe_check = input("Please enter the number again to confirm: ")
         while (timeframe != timeframe_check):
-            print "Error the two numbers do not match. Please try again\n"
-            timeframe = raw_input("Please enter\n11 to book 11-1\n1 to book 1-3\n 3 to book 3-5\n 5 to book 5-7\n or 7 to book 7-9\n")
-            timeframe_check = raw_input("Please enter the number again to confirm: ")
+            print("Error the two numbers do not match. Please try again\n")
+            timeframe = input("Please enter\n11 to book 11-1\n1 to book 1-3\n 3 to book 3-5\n 5 to book 5-7\n or 7 to book 7-9\n")
+            timeframe_check = input("Please enter the number again to confirm: ")
         
-        login_id_noadd = raw_input("Please enter your Net ID (without the .umail extension): ")
-        login_id_noadd_check = raw_input("Please enter your Net ID again to confirm: ")
+        login_id_noadd = input("Please enter your Net ID (without the .umail extension): ")
+        login_id_noadd_check = input("Please enter your Net ID again to confirm: ")
         while (login_id_noadd != login_id_noadd_check):
-            print "Error the two Net ID's do not match. Please try again\n"
-            login_id_noadd = raw_input("Please enter your Net ID (without the umail extension): ")
-            login_id_noadd_check = raw_input("Please enter your Net ID again to confirm: ")
+            print("Error the two Net ID's do not match. Please try again\n")
+            login_id_noadd = input("Please enter your Net ID (without the umail extension): ")
+            login_id_noadd_check = input("Please enter your Net ID again to confirm: ")
         
-        login_pwd = raw_input("Please enter your Net ID password: ")
-        login_pwd_check = raw_input("Please enter your password again to confirm: ")
+        login_pwd = input("Please enter your Net ID password: ")
+        login_pwd_check = input("Please enter your password again to confirm: ")
         while (login_pwd != login_pwd_check):
-            print "Error the two passwords do not match. Please try again\n"
-            login_pwd = raw_input("Please enter your Net ID password: ")
-            login_pwd_check = raw_input("Please enter your password again to confirm: ")
+            print("Error the two passwords do not match. Please try again\n")
+            login_pwd = input("Please enter your Net ID password: ")
+            login_pwd_check = input("Please enter your password again to confirm: ")
     
         #write the answers to the prompts line by line 
         f.write(timeframe + '\n')
         f.write(login_id_noadd + '\n')
         f.write(login_pwd + '\n')
-        if (k == 5):
+        if (k == NUM_USERS):
             f.close()
             
 #opens file with necessary information		
 f = open('library_room.txt', 'r')
     
-for k in range(5):
+for k in range(NUM_USERS):
         
     #reads first line which determines times to book (need to get rid of '\n' character)
     timeframe = f.readline()
@@ -93,7 +95,7 @@ for k in range(5):
     #create a datetime object
     current_date = web.find_element_by_xpath('//*[@id="s-lc-rm-tg-h"]')
     current_date = current_date.get_attribute('innerHTML')
-    print "Today's day is currently: " + current_date + "\n"
+    print("Today's day is currently: " + current_date + "\n")
 
     #split the date and create a modified date in a format that will be used 
     #to create a datetime object in the form Month day Year
@@ -108,7 +110,7 @@ for k in range(5):
     #initialize the day of reference. This is important, because every number
     #on the reservation grid is determined based on the numbers found on this
     #day in the html file
-    day_reference = datetime(2018,01,17)
+    day_reference = datetime(2018,1,17)
 
     #the difference in days between the current day and the day of reference
     #datetime objects will allow us to determine how many days it has been
@@ -154,7 +156,7 @@ for k in range(5):
     #go back to creating a datetime object of the day we are supposed to be 
     #booking (14 days in advance)
     mod_date = datetime.strftime(mod_datetime, '%b %d %Y')
-    print "Attempting to book a room on " + mod_date + "..\n"
+    print("Attempting to book a room on " + mod_date + "..\n")
 
     #gather the month
     month = mod_date.split(" ",3)[0]
@@ -236,18 +238,20 @@ for k in range(5):
     sub_booking = wait.until(EC.element_to_be_clickable((By.XPATH,'//*[@id="s-lc-rm-sub"]')))
     time.sleep(0.7)
     sub_booking.click()
+    web.implicitly_wait(1)
+    web.close()
 
 #wait for the booking to send an email and then execute the following code
 #after 5 minutes 
 f.close()
-print "Waiting 2 minutes to ensure that confirmation email is sent and then accessing it..." 
-time.sleep(120)
+print("Waiting ten seconds to ensure that confirmation email is sent and then accessing it...")
+time.sleep(10)
 
 
 #opens file with necessary information		
 f = open('library_room.txt', 'r')
 
-for k in range(5):
+for k in range(NUM_USERS):
     #reads first line which determines times to book (need to get rid of '\n' character)
     timeframe = f.readline()
     timeframe = int(timeframe.rstrip('\n'))
@@ -280,15 +284,15 @@ for k in range(5):
         latest_email_id = int(id_list[-1])
 
         #iterate through the most recent couple of emails to see if it came
-        for i in range(latest_email_id,latest_email_id-2,-1):
-            typ, data = mail.fetch(i,'(RFC822)')
+        for id in range(latest_email_id,latest_email_id-2,-1):
+            type, data = mail.fetch(str(id),'(RFC822)')
         
             #iterate through the successful mail fetches
             for response_part in data:
                 #if there is an instance find out what the subject and message
                 #are. The confirmation email will be a multipart message 
                 if isinstance(response_part, tuple):
-                    msg = email.message_from_string(response_part[1])
+                    msg = email.message_from_string(response_part[1].decode())
                     email_subject = msg['subject']
                     email_from = msg['from']
                 
@@ -304,12 +308,15 @@ for k in range(5):
                         unclean_link = unclean_link.replace(")",'')
                         unclean_link = unclean_link.replace("amp;",'')
                         clean_link = "http://" + unclean_link + "&m=confirm"
-                        print "accessing...\n%s\n" %(clean_link)
-                        urllib2.urlopen(str(clean_link))
-                        print "\n\nshould have worked\n\n"
+                        print("accessing...\n%s\n" %(clean_link))
+                        web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION)
+                        web.get(str(clean_link))
+                        web.implicitly_wait(1)
+                        web.close()
+                        print("\n\nshould have worked\n\n")
                             
     except Exception as e:
-        print str(e)
+        print(str(e))
+        raise e
         
 f.close()
-            
