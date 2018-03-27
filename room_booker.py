@@ -15,6 +15,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 import smtplib
 import re
 import imaplib
@@ -47,11 +48,14 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
     IMTP_PORT = 993
     HARDCODED_DRIVER_LOCATION = 'C:\\Users\\Gavin\\Desktop\\chromedriver.exe'
     LIBCAL_EMAIL_ADDRESS = 'LibCal <alerts@mail.libcal.com>'
+    driver_options = Options()
+    driver_options.add_argument('--headless')
+    driver_options.add_argument('--disable-gpu')
 
     # -- change this to the number of people whose credentials will be used --
     NUM_USERS = 6
 
-    # -- set to True if you need to undo recent (today's) bookings for whatever reason --
+    # -- set to True if you need to undo recent (today's) bookings for whatever reason -- WARNING: this will cancel ANY recent enough booking, which may be a booking you dont want cancelled
     RESET_BOOKINGS = False
 
     # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
@@ -97,7 +101,7 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
     #request timeslots 
     for k in range(NUM_USERS):
         #initialize our driver called web and use chrome to open up library booking link
-        web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION)
+        web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION, chrome_options=driver_options)
 
         #reads first line which determines times to book (need to get rid of '\n' character)
         timeframe = f.readline()
@@ -237,7 +241,7 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
         #go back to creating a datetime object of the day we are supposed to be 
         #booking (14 days in advance)
         mod_date = datetime.strftime(booking_datetime, '%b %d %Y')
-        logger.info("Attempting to book a room on " + mod_date + " for emailid: " + email_login_id)
+        logger.info("Attempting to book a room on " + mod_date + " (" + str(days_in_advance) + " days from today) for emailid: " + email_login_id)
 
         #gather the month
         month = mod_date.split(" ",3)[0]
@@ -375,9 +379,9 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
     f.close()
 
 try:
-    lower_bound = 7
-    upper_bound = 11
-    for days_in_advance in range(lower_bound, upper_bound):
+    lower_bound = 14 #inclusive
+    upper_bound = 14 #inclusive
+    for days_in_advance in range(lower_bound, upper_bound + 1):
         main(days_in_advance)
 except Exception as e:
     web.close()
