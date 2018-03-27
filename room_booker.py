@@ -19,6 +19,21 @@ import smtplib
 import re
 import imaplib
 import email
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# create a file handler
+handler = logging.FileHandler('output.log')
+handler.setLevel(logging.INFO)
+
+# create a logging format
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+# add the handlers to the logger
+logger.addHandler(handler)
 
 UCSB_ADD = "@umail.ucsb.edu"
 FORTNIGHT = 14
@@ -27,7 +42,7 @@ IMTP_PORT = 993
 HARDCODED_DRIVER_LOCATION = 'C:\\Users\\Gavin\\Desktop\\chromedriver.exe'
 
 # -- change this to the number of people whose credentials will be used --
-NUM_USERS = 1
+NUM_USERS = 5
 
 #enters if file does not already exist and prompts user to enter necessary info to run program
 if (os.path.isfile('library_room.txt') == False):
@@ -90,6 +105,7 @@ for k in range(NUM_USERS):
     #Note: The wait times were implemented merely to ensure that everything loaded before
     #searching through the html file for data
     web.implicitly_wait(0.5)
+    
 
     #get the current date from an xpath it is already in a better form to
     #create a datetime object
@@ -143,7 +159,7 @@ for k in range(NUM_USERS):
     elif timeframe == 7:
         numdiff = 600893805
     else:
-        raise ValueError('a proper timeframe was not read from the file')
+        logger.error('a proper timeframe was not read from the file')
     
     #perform basic arithmetic and cast as strings to later use when searching
     #xpath to decide what grid boxes to click 
@@ -173,21 +189,21 @@ for k in range(NUM_USERS):
     #because often days are unavailable for booking when school is not in 
     #session 
     if (month == 'Jan' and day < '16' and year == '2018'):
-        raise ValueError(month + ' ' + day + ' ' + year + ' is not an academic day')
+        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
     elif (month == 'Feb' and day == '19' and year == '2018'):
-        raise ValueError(month + ' ' + day + ' ' + year + ' is not an academic day')
+        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
     elif (month == 'Mar' and day > '22' and year == '2018'):
-        raise ValueError(month + ' ' + day + ' ' + year + ' is not an academic day')
+        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
     elif (month == 'May' and day == '28' and year == '2018'):
-        raise ValueError(month + ' ' + day + ' ' + year + ' is not an academic day')
+        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
     elif (month == 'Jun' and day > '14' and year == '2018'):
-        raise ValueError(month + ' ' + day + ' ' + year + ' is not an academic day')
+        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
     elif (month == 'Jul' or month == 'Aug'):
-        raise ValueError(month + ' ' + day + ' ' + year + ' is not an academic day')
+        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
     elif (month == 'Sep' and day < '24' and year == '2018'):
-        raise ValueError(month + ' ' + day + ' ' + year + ' is not an academic day')
-    elif (month == 'Nov' and (day == '12' or day == '22' or day == '23') and year == '2018'):
-        raise ValueError(month + ' ' + day + ' ' + year + ' is not an academic day')
+        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
+    elif (month == 'Nov' and (day == '12' or day == '22' or day == '23') and year == '2018')
+        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
 
     #prepare a wait to ensure everything is clicked
     wait = WebDriverWait(web, 10)
@@ -202,18 +218,14 @@ for k in range(NUM_USERS):
 
     #perform all of the bookings using our difference factors
     #by clicking on the timegrids at predetermined locations
-    book1 = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='"+ difference_factor1 +"']")))
-    book1.click()
-    time.sleep(0.3)
-    book2 = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='"+ difference_factor2 +"']")))
-    book2.click()
-    time.sleep(0.3)
-    book3 = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='"+ difference_factor3 +"']")))
-    book3.click()
-    time.sleep(0.3)
-    book4 = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='"+ difference_factor4 +"']")))
-    book4.click()
-
+    try:
+        web.execute_script("document.getElementById('" + difference_factor1 + "').click()")
+        web.execute_script("document.getElementById('" + difference_factor2 + "').click()")
+        web.execute_script("document.getElementById('" + difference_factor3 + "').click()")
+        web.execute_script("document.getElementById('" + difference_factor4 + "').click()")
+    except:
+        logger.warn("Time slots unavailable for: " + str(timeframe) + " - " + str((timeframe+2) % 12) + "on " + month + "-" + day + "-" + year)
+        continue #continue loop for next credential
 
     #click continue
     cont = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="rm_tc_cont"]')))
@@ -316,7 +328,6 @@ for k in range(NUM_USERS):
                         print("\n\nshould have worked\n\n")
                             
     except Exception as e:
-        print(str(e))
-        raise e
+        logger.error('Failed to confirm email: ' + str(e), exc_info=True)
         
 f.close()
