@@ -22,33 +22,41 @@ import email
 import logging
 import sys
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# create a file handler
+handler = logging.FileHandler('output.log')
+handler.setLevel(logging.INFO)
+
+# create a logging format
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+# add the handlers to the logger
+logger.addHandler(handler)
+
+def getEmailDateTime(unformatted_date):
+    return datetime.fromtimestamp(email.utils.mktime_tz(email.utils.parsedate_tz(unformatted_date)))
+
 def main():
     global web
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-
-    # create a file handler
-    handler = logging.FileHandler('output.log')
-    handler.setLevel(logging.INFO)
-
-    # create a logging format
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-
-    # add the handlers to the logger
-    logger.addHandler(handler)
-
+    global logger
     UCSB_ADD = "@umail.ucsb.edu"
     FORTNIGHT = 14
     IMTP_ADD = "outlook.office365.com"
     IMTP_PORT = 993
     HARDCODED_DRIVER_LOCATION = 'C:\\Users\\Gavin\\Desktop\\chromedriver.exe'
+    LIBCAL_EMAIL_ADDRESS = 'LibCal <alerts@mail.libcal.com>'
 
     # -- change this to the number of people whose credentials will be used --
     NUM_USERS = 6
 
     # -- set to True if you need to undo recent (today's) bookings for whatever reason --
-    RESET_BOOKINGS = False
+    RESET_BOOKINGS = True
+
+    # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
+    CANCEL_TIME_WINDOW = 20
 
     #input credentials
     #enters if file does not already exist and prompts user to enter necessary info to run program
@@ -104,75 +112,72 @@ def main():
         login_pwd = f.readline()
         login_pwd = login_pwd.rstrip('\n')
 
-
-        
         #email id
         email_login_id = login_id_noadd + UCSB_ADD
 
         logger.info("\n" + "-"*16 + "\n" + "Begin work on emailid: " + email_login_id)
-        #delete previous bookings
+
+        #cancelf previous bookings
         if (RESET_BOOKINGS):
+            #open up a mail session with our IMTP_ADD and login then look at inbox
+            mail = imaplib.IMAP4_SSL(IMTP_ADD)
             try:
-                #open up a mail session with our IMTP_ADD and login then look at inbox
-                mail = imaplib.IMAP4_SSL(IMTP_ADD)
                 mail.login(email_login_id, login_pwd)
                 mail.select('inbox')
-            
+                
+                search_subject = 'Your booking has been confirmed!'
+
                 #search through all of the mail 
-                type, data = mail.search(None, 'ALL')
+                typ, data = mail.search(None, '(SUBJECT "' + search_subject + '")')
                 mail_ids = data[0]
             
-                #make a list of the mail ids and assign the first (oldest) and latest
-                #emails
-                id_list = mail_ids.split()   
-                first_email_id = int(id_list[0])
+                #make a list of the mail ids and assign the latest email
+                id_list = mail_ids.split()
                 latest_email_id = int(id_list[-1])
 
                 #iterate through the most recent couple of emails to see if it came
                 found_email = False
-                for id in range(latest_email_id,latest_email_id-2,-1):
+                
+                for id in range(latest_email_id,latest_email_id-5,-1):
                     if (found_email):
                         break
-                    type, data = mail.fetch(str(id),'(RFC822)')
-                
-                    #iterate through the successful mail fetches
-                    for response_part in data:
-                        #if there is an instance find out what the subject and message
-                        #are. The confirmation email will be a multipart message 
-                        if isinstance(response_part, tuple):
-                            msg = email.message_from_string(response_part[1].decode())
-                            email_subject = msg['subject']
-                            email_from = msg['from']
-                        
-                            #all confirmation emails follow this structure so if it
-                            #is a confirmation email gather the link and clean it up
-                            #so that it can be opened up and accessed.
-                            if email_subject == 'Your booking has been confirmed!' and email_from == 'LibCal <alerts@mail.libcal.com>':
-                                cancel_link = re.search("http://(.+?)\"", str(msg.get_payload(0)))
-                                unclean_link = str(cancel_link.groups(0))
-                                unclean_link = unclean_link.replace("'",'')
-                                unclean_link = unclean_link.replace("(",'')
-                                unclean_link = unclean_link.replace(",",'')
-                                unclean_link = unclean_link.replace(")",'')
-                                unclean_link = unclean_link.replace("amp;",'')
-                                clean_link = "http://" + unclean_link
-                                logger.info("Accessing cancellation link for emailid: " + email_login_id +"\n\t->link = " + clean_link)
-                                web.get(str(clean_link))
-                                web.implicitly_wait(1)
-                                try:
-                                    web.execute_script("document.getElementsByClassName('btn btn-primary')[0].click()")
-                                except:
-                                    logger.warn("Stale cancellation link")
-                                    break
-                                logger.info("Booking should have cancelled")
-                                found_email = True
-                                break
+                    typ, data = mail.fetch(str(id),'(RFC822)')
+
+                    msg = email.message_from_string(data[0][1].decode())
+                    email_subject = msg['subject']
+                    email_from = msg['from']
+                    email_time = getEmailDateTime(msg['Date'])
+                    curr_time = datetime.now()
+                    isRecent = (curr_time - email_time < timedelta(hours = CANCEL_TIME_WINDOW))
+                    
+                    #get booking confirmed email
+                    if email_subject == search_subject and email_from == LIBCAL_EMAIL_ADDRESS and isRecent:
+                        cancel_link = re.search("http://(.+?)\"", str(msg.get_payload(0)))
+                        unclean_link = str(cancel_link.groups(0))
+                        unclean_link = unclean_link.replace("'",'')
+                        unclean_link = unclean_link.replace("(",'')
+                        unclean_link = unclean_link.replace(",",'')
+                        unclean_link = unclean_link.replace(")",'')
+                        unclean_link = unclean_link.replace("amp;",'')
+                        clean_link = "http://" + unclean_link
+                        logger.info("Accessing cancellation link for emailid: " + email_login_id +"\n\t->link = " + clean_link)
+                        web.get(str(clean_link))
+                        web.implicitly_wait(1)
+                        try:
+                            web.execute_script("document.getElementsByClassName('btn btn-primary')[0].click()")
+                        except:
+                            logger.warn("Stale cancellation link")
+                            break
+                        logger.info("Booking should have cancelled")
+                        found_email = True
+                        break
                 if (found_email != True):
                     logger.warning("Could not cancel a booking for email id: " + email_login_id)
                                     
             except Exception as e:
                 logger.warning('Failed to cancel email: ' + str(e), exc_info=True)
-
+            mail.close()
+            mail.logout()
         #get the library reservations page
         web.get("http://libcal.library.ucsb.edu/rooms.php?i=12405")
 
@@ -194,29 +199,22 @@ def main():
 
         #create the datetime object by passing mod_date into the string parse
         #time function with the form Month day Year
-        mod_datetime = datetime.strptime(mod_date,'%B %d %Y')
+        current_datetime = datetime.strptime(mod_date,'%B %d %Y')
 
         #initialize the day of reference. This is important, because every number
         #on the reservation grid is determined based on the numbers found on this
         #day in the html file
         day_reference = datetime(2018,1,17)
 
-        #the difference in days between the current day and the day of reference
-        #datetime objects will allow us to determine how many days it has been
-        #and thus how much to multiply each value by
-        numday_difference = mod_datetime - day_reference
-        numday_difference_str = str(numday_difference)
-        numday_difference_str = numday_difference_str.split(' ',1)[0]
-
-        #convert how many days it has been since the day of reference to an int
-        #for calculations later
-        numday_difference_int = int(numday_difference_str)
-
         #dt is initialized to 14 days in advance (the soonest we can reserve a 
         #room) and then it is added to the current day
         dt = timedelta(days=FORTNIGHT)
-        mod_datetime = mod_datetime + dt
+        booking_datetime = current_datetime + dt
 
+        #the difference in days between the current day and the day of reference
+        #datetime objects will allow us to determine how many days it has been
+        #and thus how much to multiply each value by
+        numday_difference = booking_datetime - day_reference
 
         #these values are the initial values assigned to the grids in the html
         #on Dec 30 2017 which is the day of reference. From here it is simply
@@ -240,7 +238,7 @@ def main():
         
         #perform basic arithmetic and cast as strings to later use when searching
         #xpath to decide what grid boxes to click 
-        difference_factor = numdiff + (numday_difference_int+FORTNIGHT)*816
+        difference_factor = numdiff + (numday_difference.days)*816
         difference_factor1 = str(difference_factor)
         difference_factor2 = str(difference_factor+1)
         difference_factor3 = str(difference_factor+2)
@@ -248,7 +246,7 @@ def main():
 
         #go back to creating a datetime object of the day we are supposed to be 
         #booking (14 days in advance)
-        mod_date = datetime.strftime(mod_datetime, '%b %d %Y')
+        mod_date = datetime.strftime(booking_datetime, '%b %d %Y')
         logger.info("Attempting to book a room on " + mod_date + " for emailid: " + email_login_id)
 
         #gather the month
@@ -330,65 +328,68 @@ def main():
         logger.info("Waiting to ensure that confirmation email is sent and then accessing it...")
         time.sleep(10)
 
+        #open up a mail session with our IMTP_ADD and login then look at inbox
+        mail = imaplib.IMAP4_SSL(IMTP_ADD)
+
         #confirm emails
         try:
-            #open up a mail session with our IMTP_ADD and login then look at inbox
-            mail = imaplib.IMAP4_SSL(IMTP_ADD)
             mail.login(email_login_id, login_pwd)
             mail.select('inbox')
-        
+
+            search_subject = 'Please confirm your booking!'
+
             #search through all of the mail 
-            type, data = mail.search(None, 'ALL')
+            typ, data = mail.search(None, '(SUBJECT "' + search_subject + '")')
             mail_ids = data[0]
         
             #make a list of the mail ids and assign the first (oldest) and latest
             #emails
-            id_list = mail_ids.split()   
-            first_email_id = int(id_list[0])
+            id_list = mail_ids.split()
             latest_email_id = int(id_list[-1])
 
             #iterate through the most recent couple of emails to see if it came
             found_email = False
-            for id in range(latest_email_id,latest_email_id-2,-1):
+            for id in range(latest_email_id,latest_email_id-5,-1):
                 if (found_email):
                     break
-                type, data = mail.fetch(str(id),'(RFC822)')
-            
-                #iterate through the successful mail fetches
-                for response_part in data:
-                    #if there is an instance find out what the subject and message
-                    #are. The confirmation email will be a multipart message 
-                    if isinstance(response_part, tuple):
-                        msg = email.message_from_string(response_part[1].decode())
-                        email_subject = msg['subject']
-                        email_from = msg['from']
-                    
-                        #all confirmation emails follow this structure so if it
-                        #is a confirmation email gather the link and clean it up
-                        #so that it can be opened up and accessed.
-                        if email_subject == 'Please confirm your booking!' and email_from == 'LibCal <alerts@mail.libcal.com>':
-                            confirm_link = re.search("http://(.+?)\"", str(msg.get_payload(1)))
-                            unclean_link = str(confirm_link.groups(0))
-                            unclean_link = unclean_link.replace("'",'')
-                            unclean_link = unclean_link.replace("(",'')
-                            unclean_link = unclean_link.replace(",",'')
-                            unclean_link = unclean_link.replace(")",'')
-                            unclean_link = unclean_link.replace("amp;",'')
-                            clean_link = "http://" + unclean_link + "&m=confirm"
-                            logger.info("Accessing confirmation link for emailid: " + email_login_id +"\n\t->link = " + clean_link)
-                            web.get(str(clean_link))
-                            web.implicitly_wait(1)
-                            logger.info("Booking should have confirmed")
-                            found_email = True
-                            break
+                typ, data = mail.fetch(str(id),'(RFC822)')
+                
+                #The confirmation email will be a multipart message 
+                msg = email.message_from_string(data[0][1].decode())
+                email_subject = msg['subject']
+                email_from = msg['from']
+                email_time = getEmailDateTime(msg['Date'])
+                curr_time = datetime.now()
+                isRecent = curr_time - email_time < timedelta(hours = CANCEL_TIME_WINDOW)
+                #all confirmation emails follow this structure so if it
+                #is a confirmation email gather the link and clean it up
+                #so that it can be opened up and accessed.
+                if email_subject == search_subject and email_from == 'LibCal <alerts@mail.libcal.com>' and isRecent:
+                    confirm_link = re.search("http://(.+?)\"", str(msg.get_payload(1)))
+                    unclean_link = str(confirm_link.groups(0))
+                    unclean_link = unclean_link.replace("'",'')
+                    unclean_link = unclean_link.replace("(",'')
+                    unclean_link = unclean_link.replace(",",'')
+                    unclean_link = unclean_link.replace(")",'')
+                    unclean_link = unclean_link.replace("amp;",'')
+                    clean_link = "http://" + unclean_link + "&m=confirm"
+                    logger.info("Accessing confirmation link for emailid: " + email_login_id +"\n\t->link = " + clean_link)
+                    web.get(str(clean_link))
+                    web.implicitly_wait(1)
+                    logger.info("Booking should have confirmed")
+                    found_email = True
+                    break
             if (found_email == False):
                 logger.warning("Could not confirm booking for timeslot: " + str(timeframe) + "-" + str((timeframe+2)%12))
         except Exception as e:
             logger.warning('Failed to confirm email: ' + str(e), exc_info=True)
+        mail.close()
+        mail.logout()
         web.close()
     f.close()
 
 try:
     main()
-except:
+except Exception as e:
     web.close()
+    logger.error("Something happened: " + str(e), exc_info=True)
