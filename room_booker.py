@@ -20,6 +20,7 @@ import re
 import imaplib
 import email
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -42,8 +43,11 @@ IMTP_PORT = 993
 HARDCODED_DRIVER_LOCATION = 'C:\\Users\\Gavin\\Desktop\\chromedriver.exe'
 
 # -- change this to the number of people whose credentials will be used --
-NUM_USERS = 5
+NUM_USERS = 6
 
+RESET_BOOKINGS = True
+
+#input credentials
 #enters if file does not already exist and prompts user to enter necessary info to run program
 if (os.path.isfile('library_room.txt') == False):
     f = open('library_room.txt', 'w')
@@ -79,9 +83,11 @@ if (os.path.isfile('library_room.txt') == False):
             
 #opens file with necessary information		
 f = open('library_room.txt', 'r')
-    
+
+#request timeslots 
 for k in range(NUM_USERS):
-        
+    #initialize our driver called web and use chrome to open up library booking link
+    web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION)
     #reads first line which determines times to book (need to get rid of '\n' character)
     timeframe = f.readline()
     timeframe = int(timeframe.rstrip('\n'))
@@ -95,23 +101,86 @@ for k in range(NUM_USERS):
     login_pwd = login_pwd.rstrip('\n')
 
 
-    #set the login id for the logging into email
+    
+    #email id
     email_login_id = login_id_noadd + UCSB_ADD
 
-    #initialize our driver called web and use chrome to open up library booking link
-    web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION)
+    logger.info("\n" + "-"*16 + "\n" + "Begin work on emailid: " + email_login_id)
+    #delete previous bookings
+    if (RESET_BOOKINGS):
+        try:
+            #open up a mail session with our IMTP_ADD and login then look at inbox
+            mail = imaplib.IMAP4_SSL(IMTP_ADD)
+            mail.login(email_login_id, login_pwd)
+            mail.select('inbox')
+        
+            #search through all of the mail 
+            type, data = mail.search(None, 'ALL')
+            mail_ids = data[0]
+        
+            #make a list of the mail ids and assign the first (oldest) and latest
+            #emails
+            id_list = mail_ids.split()   
+            first_email_id = int(id_list[0])
+            latest_email_id = int(id_list[-1])
+
+            #iterate through the most recent couple of emails to see if it came
+            found_email = False
+            for id in range(latest_email_id,latest_email_id-2,-1):
+                if (found_email):
+                    break
+                type, data = mail.fetch(str(id),'(RFC822)')
+            
+                #iterate through the successful mail fetches
+                for response_part in data:
+                    #if there is an instance find out what the subject and message
+                    #are. The confirmation email will be a multipart message 
+                    if isinstance(response_part, tuple):
+                        msg = email.message_from_string(response_part[1].decode())
+                        email_subject = msg['subject']
+                        email_from = msg['from']
+                    
+                        #all confirmation emails follow this structure so if it
+                        #is a confirmation email gather the link and clean it up
+                        #so that it can be opened up and accessed.
+                        if email_subject == 'Your booking has been confirmed!' and email_from == 'LibCal <alerts@mail.libcal.com>':
+                            cancel_link = re.search("http://(.+?)\"", str(msg.get_payload(0)))
+                            unclean_link = str(cancel_link.groups(0))
+                            unclean_link = unclean_link.replace("'",'')
+                            unclean_link = unclean_link.replace("(",'')
+                            unclean_link = unclean_link.replace(",",'')
+                            unclean_link = unclean_link.replace(")",'')
+                            unclean_link = unclean_link.replace("amp;",'')
+                            clean_link = "http://" + unclean_link
+                            logger.info("Accessing cancellation link for emailid: " + email_login_id +"\n\t->link = " + clean_link)
+                            web.get(str(clean_link))
+                            web.implicitly_wait(1)
+                            try:
+                                web.execute_script("document.getElementsByClassName('btn btn-primary')[0].click()")
+                            except:
+                                logger.warn("Stale cancellation link")
+                                break
+                            logger.info("Booking should have cancelled")
+                            found_email = True
+                            break
+            if (found_email != True):
+                logger.warning("Could not cancel a booking for email id: " + email_login_id)
+                                
+        except Exception as e:
+            logger.warning('Failed to cancel email: ' + str(e), exc_info=True)
+
+    #get the library reservations page
     web.get("http://libcal.library.ucsb.edu/rooms.php?i=12405")
 
     #Note: The wait times were implemented merely to ensure that everything loaded before
     #searching through the html file for data
     web.implicitly_wait(0.5)
-    
 
     #get the current date from an xpath it is already in a better form to
     #create a datetime object
     current_date = web.find_element_by_xpath('//*[@id="s-lc-rm-tg-h"]')
     current_date = current_date.get_attribute('innerHTML')
-    print("Today's day is currently: " + current_date + "\n")
+    logger.info("Today is " + current_date)
 
     #split the date and create a modified date in a format that will be used 
     #to create a datetime object in the form Month day Year
@@ -158,8 +227,12 @@ for k in range(NUM_USERS):
         numdiff = 600893801
     elif timeframe == 7:
         numdiff = 600893805
+    elif timeframe == 9:
+        numdiff = 600893809
     else:
-        logger.error('a proper timeframe was not read from the file')
+        logger.warning('a proper timeframe was not read from the file. Timeframe was: ' + str(timeframe))
+        web.close()
+        continue
     
     #perform basic arithmetic and cast as strings to later use when searching
     #xpath to decide what grid boxes to click 
@@ -172,7 +245,7 @@ for k in range(NUM_USERS):
     #go back to creating a datetime object of the day we are supposed to be 
     #booking (14 days in advance)
     mod_date = datetime.strftime(mod_datetime, '%b %d %Y')
-    print("Attempting to book a room on " + mod_date + "..\n")
+    logger.info("Attempting to book a room on " + mod_date + " for emailid: " + email_login_id)
 
     #gather the month
     month = mod_date.split(" ",3)[0]
@@ -188,22 +261,17 @@ for k in range(NUM_USERS):
     #basic if statements checking so as not to reserve when unnecessary and
     #because often days are unavailable for booking when school is not in 
     #session 
-    if (month == 'Jan' and day < '16' and year == '2018'):
+    if ((month == 'Jan' and day < '16' and year == '2018')
+    or (month == 'Feb' and day == '19' and year == '2018')
+    or (month == 'Mar' and day > '22' and year == '2018')
+    or (month == 'May' and day == '28' and year == '2018')
+    or (month == 'Jun' and day > '14' and year == '2018')
+    or (month == 'Jul' or month == 'Aug')
+    or (month == 'Sep' and day < '24' and year == '2018')
+    or (month == 'Nov' and (day == '12' or day == '22' or day == '23') and year == '2018')):
         logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
-    elif (month == 'Feb' and day == '19' and year == '2018'):
-        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
-    elif (month == 'Mar' and day > '22' and year == '2018'):
-        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
-    elif (month == 'May' and day == '28' and year == '2018'):
-        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
-    elif (month == 'Jun' and day > '14' and year == '2018'):
-        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
-    elif (month == 'Jul' or month == 'Aug'):
-        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
-    elif (month == 'Sep' and day < '24' and year == '2018'):
-        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
-    elif (month == 'Nov' and (day == '12' or day == '22' or day == '23') and year == '2018')
-        logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
+        web.close()
+        sys.exit()
 
     #prepare a wait to ensure everything is clicked
     wait = WebDriverWait(web, 10)
@@ -214,7 +282,7 @@ for k in range(NUM_USERS):
     time.sleep(0.5)
     reserve_date = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@class='ui-state-default'][text()[contains(.,'"+ day +"')]]")))
     reserve_date.click()
-    time.sleep(2)
+    time.sleep(1)
 
     #perform all of the bookings using our difference factors
     #by clicking on the timegrids at predetermined locations
@@ -224,7 +292,8 @@ for k in range(NUM_USERS):
         web.execute_script("document.getElementById('" + difference_factor3 + "').click()")
         web.execute_script("document.getElementById('" + difference_factor4 + "').click()")
     except:
-        logger.warn("Time slots unavailable for: " + str(timeframe) + " - " + str((timeframe+2) % 12) + "on " + month + "-" + day + "-" + year)
+        logger.warn("Time slots unavailable for: " + str(timeframe) + " - " + str((timeframe+2) % 12) + " on " + month + "-" + day + "-" + year)
+        web.close()
         continue #continue loop for next credential
 
     #click continue
@@ -251,34 +320,13 @@ for k in range(NUM_USERS):
     time.sleep(0.7)
     sub_booking.click()
     web.implicitly_wait(1)
-    web.close()
 
-#wait for the booking to send an email and then execute the following code
-#after 5 minutes 
-f.close()
-print("Waiting ten seconds to ensure that confirmation email is sent and then accessing it...")
-time.sleep(10)
+    #wait for the booking to send an email and then execute the following code
+    #after 5 minutes 
+    logger.info("Waiting to ensure that confirmation email is sent and then accessing it...")
+    time.sleep(10)
 
-
-#opens file with necessary information		
-f = open('library_room.txt', 'r')
-
-for k in range(NUM_USERS):
-    #reads first line which determines times to book (need to get rid of '\n' character)
-    timeframe = f.readline()
-    timeframe = int(timeframe.rstrip('\n'))
-
-    #reads second line which is the Net ID (need to get rid of '\n' character)
-    login_id_noadd = f.readline()
-    login_id_noadd = login_id_noadd.rstrip('\n')
-
-    #reads third line which is the users login password (need to get rid of '\n' character)
-    login_pwd = f.readline()
-    login_pwd = login_pwd.rstrip('\n')
-
-
-    #set the login id for the logging into email
-    email_login_id = login_id_noadd + UCSB_ADD
+    #confirm emails
     try:
         #open up a mail session with our IMTP_ADD and login then look at inbox
         mail = imaplib.IMAP4_SSL(IMTP_ADD)
@@ -296,7 +344,10 @@ for k in range(NUM_USERS):
         latest_email_id = int(id_list[-1])
 
         #iterate through the most recent couple of emails to see if it came
+        found_email = False
         for id in range(latest_email_id,latest_email_id-2,-1):
+            if (found_email):
+                break
             type, data = mail.fetch(str(id),'(RFC822)')
         
             #iterate through the successful mail fetches
@@ -320,14 +371,15 @@ for k in range(NUM_USERS):
                         unclean_link = unclean_link.replace(")",'')
                         unclean_link = unclean_link.replace("amp;",'')
                         clean_link = "http://" + unclean_link + "&m=confirm"
-                        print("accessing...\n%s\n" %(clean_link))
-                        web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION)
+                        logger.info("Accessing confirmation link for emailid: " + email_login_id +"\n\t->link = " + clean_link)
                         web.get(str(clean_link))
                         web.implicitly_wait(1)
-                        web.close()
-                        print("\n\nshould have worked\n\n")
-                            
+                        logger.info("Booking should have confirmed")
+                        found_email = True
+                        break
+        if (found_email == False):
+            logger.warning("Could not confirm booking for timeslot: " + str(timeframe) + "-" + str((timeframe+2)%12))
     except Exception as e:
-        logger.error('Failed to confirm email: ' + str(e), exc_info=True)
-        
+        logger.warning('Failed to confirm email: ' + str(e), exc_info=True)
+    web.close()
 f.close()
