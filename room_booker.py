@@ -46,7 +46,7 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
     UCSB_ADD = "@umail.ucsb.edu"
     IMTP_ADD = "outlook.office365.com"
     IMTP_PORT = 993
-    HARDCODED_DRIVER_LOCATION = 'C:\\Users\\Gavin\\Desktop\\chromedriver.exe'
+    #HARDCODED_DRIVER_LOCATION = 'path/to/your/chromedriver' # -- you can omit this if you set up your path variables to point to your chromedriver or if you simply put the chromedriver in the same folder as this py script
     LIBCAL_EMAIL_ADDRESS = 'LibCal <alerts@mail.libcal.com>'
     driver_options = Options()
     driver_options.add_argument('--headless')
@@ -101,7 +101,8 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
     #request timeslots 
     for k in range(NUM_USERS):
         #initialize our driver called web and use chrome to open up library booking link
-        web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION, chrome_options=driver_options)
+        web = webdriver.Chrome(chrome_options=driver_options)
+        #web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION, chrome_options=driver_options) # use this if you specify a hardcoded path to the chromedriver
 
         #reads first line which determines times to book (need to get rid of '\n' character)
         timeframe = f.readline()
