@@ -40,7 +40,7 @@ logger.addHandler(handler)
 def getEmailDateTime(unformatted_date):
     return datetime.fromtimestamp(email.utils.mktime_tz(email.utils.parsedate_tz(unformatted_date)))
 
-def main(NUM_OF_DAYS_IN_ADVANCE):
+def run(NUM_OF_DAYS_IN_ADVANCE, STARTING_TIMESLOT, NUM_USERS, RESET_BOOKINGS=False, CANCEL_TIME_WINDOW=1):
     global web
     global logger
     UCSB_ADD = "@umail.ucsb.edu"
@@ -51,68 +51,21 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
     driver_options = Options()
     driver_options.add_argument('--headless')
     driver_options.add_argument('--disable-gpu')
-
-    # -- change this to the number of people whose credentials will be used --
-    NUM_USERS = 6
-
-    # -- set to True if you need to undo recent (today's) bookings for whatever reason -- WARNING: this will cancel ANY recent enough booking, which may be a booking you dont want cancelled
-    RESET_BOOKINGS = False
-
-    # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
-    CANCEL_TIME_WINDOW = 1
-
-    #input credentials
-    #enters if file does not already exist and prompts user to enter necessary info to run program
-    if (os.path.isfile('library_room.txt') == False):
-        f = open('library_room.txt', 'w')
-        for k in range(NUM_USERS):
-        
-            timeframe = input("Please enter\n11 to book 11-1\n1 to book 1-3\n 3 to book 3-5\n 5 to book 5-7\n or 7 to book 7-9\n")
-            timeframe_check = input("Please enter the number again to confirm: ")
-            while (timeframe != timeframe_check):
-                print("Error the two numbers do not match. Please try again\n")
-                timeframe = input("Please enter\n11 to book 11-1\n1 to book 1-3\n 3 to book 3-5\n 5 to book 5-7\n or 7 to book 7-9\n")
-                timeframe_check = input("Please enter the number again to confirm: ")
-            
-            login_id_noadd = input("Please enter your Net ID (without the .umail extension): ")
-            login_id_noadd_check = input("Please enter your Net ID again to confirm: ")
-            while (login_id_noadd != login_id_noadd_check):
-                print("Error the two Net ID's do not match. Please try again\n")
-                login_id_noadd = input("Please enter your Net ID (without the umail extension): ")
-                login_id_noadd_check = input("Please enter your Net ID again to confirm: ")
-            
-            login_pwd = input("Please enter your Net ID password: ")
-            login_pwd_check = input("Please enter your password again to confirm: ")
-            while (login_pwd != login_pwd_check):
-                print("Error the two passwords do not match. Please try again\n")
-                login_pwd = input("Please enter your Net ID password: ")
-                login_pwd_check = input("Please enter your password again to confirm: ")
-        
-            #write the answers to the prompts line by line 
-            f.write(timeframe + '\n')
-            f.write(login_id_noadd + '\n')
-            f.write(login_pwd + '\n')
-            if (k == NUM_USERS):
-                f.close()
-                
+               
     #opens file with necessary information		
     f = open('library_room.txt', 'r')
 
     #request timeslots 
     for k in range(NUM_USERS):
         #initialize our driver called web and use chrome to open up library booking link
-        web = webdriver.Chrome(chrome_options=driver_options)
+        web = webdriver.Chrome()
         #web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION, chrome_options=driver_options) # use this if you specify a hardcoded path to the chromedriver
 
-        #reads first line which determines times to book (need to get rid of '\n' character)
-        timeframe = f.readline()
-        timeframe = int(timeframe.rstrip('\n'))
-
-        #reads second line which is the Net ID (need to get rid of '\n' character)
+        #reads first line which is the Net ID (need to get rid of '\n' character)
         login_id_noadd = f.readline()
         login_id_noadd = login_id_noadd.rstrip('\n')
 
-        #reads third line which is the users login password (need to get rid of '\n' character)
+        #reads second line which is the users login password (need to get rid of '\n' character)
         login_pwd = f.readline()
         login_pwd = login_pwd.rstrip('\n')
 
@@ -173,6 +126,7 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
                 logger.warning('Failed to cancel email: ' + str(e), exc_info=True)
             mail.close()
             mail.logout()
+        
         #get the library reservations page
         web.get("http://libcal.library.ucsb.edu/rooms.php?i=12405")
 
@@ -211,38 +165,33 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
         #and thus how much to multiply each value by
         numday_difference = booking_datetime - day_reference
 
-        #these values are the initial values assigned to the grids in the html
-        #on Dec 30 2017 which is the day of reference. From here it is simply
-        #a matter of adding a multiple that was determined to be 816
-        if timeframe == 11:
-            numdiff = 600893789
-        elif timeframe == 1:
-            numdiff = 600893793
-        elif timeframe == 3:
-            numdiff = 600893797
-        elif timeframe == 5:
-            numdiff = 600893801
-        elif timeframe == 7:
-            numdiff = 600893805
-        elif timeframe == 9:
-            numdiff = 600893809
-        else:
-            logger.warning('a proper timeframe was not read from the file. Timeframe was: ' + str(timeframe))
-            web.close()
-            continue
+        #the beginning timeslot of the 2 hours we want to book
+        TARGET_TIMESLOT = STARTING_TIMESLOT + 2*k
+
+        #this value is the initial value assigned to room 2528 grid in the html
+        #on Jan 01 2018 for 11am. From here it is simply
+        #a matter of adding a multiple of 816 per day since that day.
+        REFERENCE_TIMESLOT = 11 # our reference timeslot was for 11am
+        REFERENCE_TIMESLOT_ID = 600893789 + 2*(TARGET_TIMESLOT - REFERENCE_TIMESLOT)
         
         #perform basic arithmetic and cast as strings to later use when searching
         #xpath to decide what grid boxes to click 
-        difference_factor = numdiff + (numday_difference.days)*816
+        difference_factor = REFERENCE_TIMESLOT_ID + (numday_difference.days)*816
+        logger.info("Timeslot grid id was: " + str(difference_factor))
+
+        #timeslots are reserved 30 minutes at a time and for a maximum of 2 hours, so we need to reserve four slots
         difference_factor1 = str(difference_factor)
         difference_factor2 = str(difference_factor+1)
         difference_factor3 = str(difference_factor+2)
         difference_factor4 = str(difference_factor+3)
 
+        #Used for logging purposes
+        TIMESLOT_RANGE = str((TARGET_TIMESLOT) % 12) + " - " + str((TARGET_TIMESLOT + 2) % 12)
+
         #go back to creating a datetime object of the day we are supposed to be 
         #booking (14 days in advance)
         mod_date = datetime.strftime(booking_datetime, '%b %d %Y')
-        logger.info("Attempting to book a room on " + mod_date + " (" + str(days_in_advance) + " days from today) for emailid: " + email_login_id)
+        logger.info("Attempting to book the room for " + TIMESLOT_RANGE + " on " + mod_date + " (" + str(NUM_OF_DAYS_IN_ADVANCE) + " days from today) for emailid: " + email_login_id)
 
         #gather the month
         month = mod_date.split(" ",3)[0]
@@ -254,21 +203,6 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
 
         #gather the year
         year = mod_date.split(" ",3)[2]
-
-        #basic if statements checking so as not to reserve when unnecessary and
-        #because often days are unavailable for booking when school is not in 
-        #session 
-        if ((month == 'Jan' and day < '16' and year == '2018')
-        or (month == 'Feb' and day == '19' and year == '2018')
-        or (month == 'Mar' and day > '22' and year == '2018')
-        or (month == 'May' and day == '28' and year == '2018')
-        or (month == 'Jun' and day > '14' and year == '2018')
-        or (month == 'Jul' or month == 'Aug')
-        or (month == 'Sep' and day < '24' and year == '2018')
-        or (month == 'Nov' and (day == '12' or day == '22' or day == '23') and year == '2018')):
-            logger.error(month + ' ' + day + ' ' + year + ' is not an academic day')
-            web.close()
-            sys.exit()
 
         #prepare a wait to ensure everything is clicked
         wait = WebDriverWait(web, 10)
@@ -289,7 +223,7 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
             web.execute_script("document.getElementById('" + difference_factor3 + "').click()")
             web.execute_script("document.getElementById('" + difference_factor4 + "').click()")
         except:
-            logger.warn("Time slots unavailable for: " + str(timeframe) + " - " + str((timeframe+2) % 12) + " on " + month + "-" + day + "-" + year)
+            logger.warn("Time slots unavailable for: " + TIMESLOT_RANGE + " on " + month + "-" + day + "-" + year)
             web.close()
             continue #continue loop for next credential
 
@@ -371,7 +305,7 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
                 web.implicitly_wait(1)
                 logger.info("Booking should have confirmed")
             else:
-                logger.warning("Could not confirm booking for timeslot: " + str(timeframe) + "-" + str((timeframe+2)%12))
+                logger.warning("Could not confirm booking for timeslots: " + TIMESLOT_RANGE)
         except Exception as e:
             logger.warning('Failed to confirm email: ' + str(e), exc_info=True)
         mail.close()
@@ -379,11 +313,51 @@ def main(NUM_OF_DAYS_IN_ADVANCE):
         web.close()
     f.close()
 
-try:
+def main():
+    #parameters
     lower_bound = 14 #inclusive
     upper_bound = 14 #inclusive
-    for days_in_advance in range(lower_bound, upper_bound + 1):
-        main(days_in_advance)
-except Exception as e:
-    web.close()
-    logger.error("Something happened: " + str(e), exc_info=True)
+    starting_timeslot = 11 #specify the timeslot you want to start reserving a block of time from e.g. 11am (note that )
+    
+    # -- change this to the number of people whose credentials will be used --
+    NUM_USERS = 6
+
+    # -- set to True if you need to undo recent (today's) bookings for whatever reason -- WARNING: this will cancel ANY recent enough booking, which may be a booking you dont want cancelled
+    RESET_BOOKINGS = False
+
+    # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
+    CANCEL_TIME_WINDOW = 1
+
+    #input credentials
+    #enters if file does not already exist and prompts user to enter necessary info to run program
+    if (os.path.isfile('library_room.txt') == False):
+        f = open('library_room.txt', 'w')
+        for k in range(NUM_USERS):            
+            login_id_noadd = input("Please enter your Net ID (without the .umail extension): ")
+            login_id_noadd_check = input("Please enter your Net ID again to confirm: ")
+            while (login_id_noadd != login_id_noadd_check):
+                print("Error the two Net ID's do not match. Please try again\n")
+                login_id_noadd = input("Please enter your Net ID (without the umail extension): ")
+                login_id_noadd_check = input("Please enter your Net ID again to confirm: ")
+            
+            login_pwd = input("Please enter your Net ID password: ")
+            login_pwd_check = input("Please enter your password again to confirm: ")
+            while (login_pwd != login_pwd_check):
+                print("Error the two passwords do not match. Please try again\n")
+                login_pwd = input("Please enter your Net ID password: ")
+                login_pwd_check = input("Please enter your password again to confirm: ")
+        
+            #write the answers to the prompts line by line
+            f.write(login_id_noadd + '\n')
+            f.write(login_pwd + '\n')
+            if (k == NUM_USERS):
+                f.close()
+
+    try:
+        for days_in_advance in range(lower_bound, upper_bound + 1):
+            run(days_in_advance, starting_timeslot, NUM_USERS, RESET_BOOKINGS, CANCEL_TIME_WINDOW)
+    except Exception as e:
+        web.close()
+        logger.error("Something happened: " + str(e), exc_info=True)
+
+main()
