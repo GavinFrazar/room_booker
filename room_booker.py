@@ -40,17 +40,14 @@ logger.addHandler(handler)
 def getEmailDateTime(unformatted_date):
     return datetime.fromtimestamp(email.utils.mktime_tz(email.utils.parsedate_tz(unformatted_date)))
 
-def run(NUM_OF_DAYS_IN_ADVANCE, STARTING_TIMESLOT, NUM_USERS, RESET_BOOKINGS=False, CANCEL_TIME_WINDOW=1):
+def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOKINGS=False, CANCEL_TIME_WINDOW=1, HEADLESS=False, HARDCODED_DRIVER_LOCATION="chromedriver"):
     global web
     global logger
     UCSB_ADD = "@umail.ucsb.edu"
     IMTP_ADD = "outlook.office365.com"
     IMTP_PORT = 993
-    #HARDCODED_DRIVER_LOCATION = 'path/to/your/chromedriver' # -- you can omit this if you set up your path variables to point to your chromedriver or if you simply put the chromedriver in the same folder as this py script
+
     LIBCAL_EMAIL_ADDRESS = 'LibCal <alerts@mail.libcal.com>'
-    driver_options = Options()
-    driver_options.add_argument('--headless')
-    driver_options.add_argument('--disable-gpu')
                
     #opens file with necessary information		
     f = open('library_room.txt', 'r')
@@ -58,8 +55,14 @@ def run(NUM_OF_DAYS_IN_ADVANCE, STARTING_TIMESLOT, NUM_USERS, RESET_BOOKINGS=Fal
     #request timeslots 
     for k in range(NUM_USERS):
         #initialize our driver called web and use chrome to open up library booking link
-        web = webdriver.Chrome()
-        #web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION, chrome_options=driver_options) # use this if you specify a hardcoded path to the chromedriver
+        
+        if (HEADLESS):
+            driver_options = Options()
+            driver_options.add_argument('--headless')
+            driver_options.add_argument('--disable-gpu')
+            web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION, chrome_options=driver_options)
+        else:
+            web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION)
 
         #reads first line which is the Net ID (need to get rid of '\n' character)
         login_id_noadd = f.readline()
@@ -313,21 +316,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE, STARTING_TIMESLOT, NUM_USERS, RESET_BOOKINGS=Fal
         web.close()
     f.close()
 
-def main():
-    #parameters
-    lower_bound = 14 #inclusive
-    upper_bound = 14 #inclusive
-    starting_timeslot = 11 #specify the timeslot you want to start reserving a block of time from e.g. 11am (note that )
-    
-    # -- change this to the number of people whose credentials will be used --
-    NUM_USERS = 6
-
-    # -- set to True if you need to undo recent (today's) bookings for whatever reason -- WARNING: this will cancel ANY recent enough booking, which may be a booking you dont want cancelled
-    RESET_BOOKINGS = False
-
-    # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
-    CANCEL_TIME_WINDOW = 1
-
+def main():    
     #input credentials
     #enters if file does not already exist and prompts user to enter necessary info to run program
     if (os.path.isfile('library_room.txt') == False):
@@ -352,10 +341,25 @@ def main():
             f.write(login_pwd + '\n')
             if (k == NUM_USERS):
                 f.close()
+        #parameters
+   
+    lower_bound = 14 #inclusive
+    upper_bound = 14 #inclusive
+    starting_timeslot = 11 #specify the timeslot you want to start reserving a block of time from e.g. 11am
+    
+    # -- change this to the number of people whose credentials will be used --
+    NUM_USERS = 6
 
+    # -- set to True if you need to undo recent (today's) bookings for whatever reason -- WARNING: this will cancel ANY recent enough booking, which may be a booking you dont want cancelled
+    RESET_BOOKINGS = False
+
+    # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
+    CANCEL_TIME_WINDOW = 1
+    
+    HARDCODED_DRIVER_LOCATION = 'path/to/your/chromedriver' # -- you can omit this if you set up your path variables to point to your chromedriver or if you simply put the chromedriver in the same folder as this py script
     try:
         for days_in_advance in range(lower_bound, upper_bound + 1):
-            run(days_in_advance, starting_timeslot, NUM_USERS, RESET_BOOKINGS, CANCEL_TIME_WINDOW)
+            run(days_in_advance, starting_timeslot, NUM_USERS, RESET_BOOKINGS, CANCEL_TIME_WINDOW, True)
     except Exception as e:
         web.close()
         logger.error("Something happened: " + str(e), exc_info=True)
