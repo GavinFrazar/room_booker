@@ -317,6 +317,9 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
     f.close()
 
 def main():    
+    # -- change this to the number of people whose credentials will be used --
+    NUM_USERS = 6
+
     #input credentials
     #enters if file does not already exist and prompts user to enter necessary info to run program
     if (os.path.isfile('library_room.txt') == False):
@@ -346,20 +349,23 @@ def main():
     lower_bound = 14 #inclusive
     upper_bound = 14 #inclusive
     starting_timeslot = 11 #specify the timeslot you want to start reserving a block of time from e.g. 11am
-    
-    # -- change this to the number of people whose credentials will be used --
-    NUM_USERS = 6
 
     # -- set to True if you need to undo recent (today's) bookings for whatever reason -- WARNING: this will cancel ANY recent enough booking, which may be a booking you dont want cancelled
     RESET_BOOKINGS = False
 
     # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
     CANCEL_TIME_WINDOW = 1
+
+    # -- Boolean, if true the webdriver will be run in headless mode
+    HEADLESS = True
     
-    HARDCODED_DRIVER_LOCATION = 'path/to/your/chromedriver' # -- you can omit this if you set up your path variables to point to your chromedriver or if you simply put the chromedriver in the same folder as this py script
+    # -- you can leave this as it is if you set up your path variables to point to your chromedriver or if you simply put the chromedriver in the same folder as this py script
+    # -- Otherwise set it to 'path/to/your/chromedriver.exe'
+    HARDCODED_DRIVER_LOCATION = "chromedriver"
+    
     try:
         for days_in_advance in range(lower_bound, upper_bound + 1):
-            run(days_in_advance, starting_timeslot, NUM_USERS, RESET_BOOKINGS, CANCEL_TIME_WINDOW, True)
+            run(days_in_advance, starting_timeslot, NUM_USERS, RESET_BOOKINGS, CANCEL_TIME_WINDOW, HEADLESS, HARDCODED_DRIVER_LOCATION)
     except Exception as e:
         web.close()
         logger.error("Something happened: " + str(e), exc_info=True)
