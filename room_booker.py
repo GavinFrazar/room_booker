@@ -133,6 +133,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
         #get the library reservations page
         web.get("http://libcal.library.ucsb.edu/rooms.php?i=12405")
 
+
         #Note: The wait times were implemented merely to ensure that everything loaded before
         #searching through the html file for data
         web.implicitly_wait(0.5)
@@ -227,7 +228,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
             web.execute_script("document.getElementById('" + difference_factor4 + "').click()")
         except:
             logger.warn("Time slots unavailable for: " + TIMESLOT_RANGE + " on " + month + "-" + day + "-" + year)
-            web.close()
+            web.quit()
             continue #continue loop for next credential
 
         #click continue
@@ -313,7 +314,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
             logger.warning('Failed to confirm email: ' + str(e), exc_info=True)
         mail.close()
         mail.logout()
-        web.close()
+        web.quit()
     f.close()
 
 def main():    
@@ -362,12 +363,16 @@ def main():
     # -- you can leave this as it is if you set up your path variables to point to your chromedriver or if you simply put the chromedriver in the same folder as this py script
     # -- Otherwise set it to 'path/to/your/chromedriver.exe'
     HARDCODED_DRIVER_LOCATION = "chromedriver"
-    
+
+    global web
+    web = None
     try:
         for days_in_advance in range(lower_bound, upper_bound + 1):
             run(days_in_advance, starting_timeslot, NUM_USERS, RESET_BOOKINGS, CANCEL_TIME_WINDOW, HEADLESS, HARDCODED_DRIVER_LOCATION)
     except Exception as e:
-        web.close()
         logger.error("Something happened: " + str(e), exc_info=True)
+    finally:
+        if (web):
+            web.quit()
 
 main()
