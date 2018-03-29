@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 #
 #  room_booker.py
-#  
-#  rodericd5
+#  Original Author: rodericd5
+#  Contributer: GavinFrazar
 #  
 #  created 12/24/2017 
 
