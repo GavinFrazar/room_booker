@@ -130,29 +130,36 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
             mail.close()
             mail.logout()
         
-        #get the library reservations page
-        web.get("http://libcal.library.ucsb.edu/rooms.php?i=12405")
+        while (True):
+            #get the library reservations page
+            web.get("http://libcal.library.ucsb.edu/rooms.php?i=12405")
 
+            #Note: The wait times were implemented merely to ensure that everything loaded before
+            #searching through the html file for data
+            web.implicitly_wait(0.5)
 
-        #Note: The wait times were implemented merely to ensure that everything loaded before
-        #searching through the html file for data
-        web.implicitly_wait(0.5)
+            # Get the actual current date
+            local_datetime = datetime.now()
 
-        #get the current date from an xpath it is already in a better form to
-        #create a datetime object
-        current_date = web.find_element_by_xpath('//*[@id="s-lc-rm-tg-h"]')
-        current_date = current_date.get_attribute('innerHTML')
-        logger.info("Today is " + current_date)
+            #get the current date from an xpath it is already in a better form to
+            #create a datetime object
+            current_date = web.find_element_by_xpath('//*[@id="s-lc-rm-tg-h"]')
+            current_date = current_date.get_attribute('innerHTML')
+            logger.info("Today is " + current_date)
 
-        #split the date and create a modified date in a format that will be used 
-        #to create a datetime object in the form Month day Year
-        mod_date = current_date.split(",",1)[1]
-        mod_date = mod_date.strip()
-        mod_date = mod_date.replace(',','')
+            #split the date and create a modified date in a format that will be used 
+            #to create a datetime object in the form Month day Year
+            mod_date = current_date.split(",",1)[1]
+            mod_date = mod_date.strip()
+            mod_date = mod_date.replace(',','')
 
-        #create the datetime object by passing mod_date into the string parse
-        #time function with the form Month day Year
-        current_datetime = datetime.strptime(mod_date,'%B %d %Y')
+            #create the datetime object by passing mod_date into the string parse
+            #time function with the form Month day Year
+            current_server_datetime = datetime.strptime(mod_date,'%B %d %Y')
+            if (local_datetime - current_server_datetime).days == 0:
+                break
+            else:
+                logger.warning("Server time out of sync with local time. Retrying...")
 
         #initialize the day of reference. This is important, because every number
         #on the reservation grid is determined based on the numbers found on this
@@ -162,7 +169,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
         #dt is initialized to 14 days in advance (the soonest we can reserve a 
         #room) and then it is added to the current day
         dt = timedelta(days=NUM_OF_DAYS_IN_ADVANCE)
-        booking_datetime = current_datetime + dt
+        booking_datetime = current_server_datetime + dt
 
         #the difference in days between the current day and the day of reference
         #datetime objects will allow us to determine how many days it has been
