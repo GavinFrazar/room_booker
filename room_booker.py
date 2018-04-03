@@ -252,8 +252,8 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
         password = web.find_element_by_id("password")
         username.send_keys(login_id_noadd)
         password.send_keys(login_pwd)
-        log = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="fm1"]/section[3]/input[4]')))
-        log.click()
+        login = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="fm1"]/section[3]/input[4]')))
+        login.click()
 
         #enter group name and submit the booking
         group_name = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="nick"]')))
@@ -273,19 +273,28 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
 
         #confirm emails
         try:
-            mail.login(email_login_id, login_pwd)
-            mail.select('inbox')
+            # search at most twice for a confirmation email
+            for i in range(2):
+                try:
+                    mail.login(email_login_id, login_pwd)
+                    mail.select('inbox')
 
-            search_subject = 'Please confirm your booking!'
+                    search_subject = 'Please confirm your booking!'
 
-            #search through all of the mail 
-            typ, data = mail.search(None, '(SUBJECT "' + search_subject + '")')
-            mail_ids = data[0]
-        
-            #make a list of the mail ids and assign the first (oldest) and latest
-            #emails
-            id_list = mail_ids.split()
-            latest_email_id = int(id_list[-1])
+                    #search through all of the mail 
+                    typ, data = mail.search(None, '(SUBJECT "' + search_subject + '")')
+                    mail_ids = data[0]
+                
+                    #make a list of the mail ids and assign the first (oldest) and latest
+                    #emails
+                    id_list = mail_ids.split()
+                    latest_email_id = int(id_list[-1])
+                except:
+                    logger.warning("Could not find confirm email. Waiting before retry")
+                    time.sleep(20)
+                    logger.info('Retrying search for confirm email')
+                else:
+                    break
 
             #check latest email to see if it came
             typ, data = mail.fetch(str(latest_email_id),'(RFC822)')
