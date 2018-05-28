@@ -2,3 +2,5 @@ library_room.txt
 output.log
 debug.log
 chromedriver* 
+login_info.py
+__*

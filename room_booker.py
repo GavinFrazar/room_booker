@@ -40,20 +40,17 @@ logger.addHandler(handler)
 def getEmailDateTime(unformatted_date):
     return datetime.fromtimestamp(email.utils.mktime_tz(email.utils.parsedate_tz(unformatted_date)))
 
-def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOKINGS=False, CANCEL_TIME_WINDOW=1, HEADLESS=False, HARDCODED_DRIVER_LOCATION="chromedriver"):
-    global web
+def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKINGS=False, CANCEL_TIME_WINDOW=1, HEADLESS=False, HARDCODED_DRIVER_LOCATION="chromedriver", ROOM_OFFSET=0):
+    # global web
     global logger
     UCSB_ADD = "@umail.ucsb.edu"
     IMTP_ADD = "outlook.office365.com"
     IMTP_PORT = 993
-
     LIBCAL_EMAIL_ADDRESS = 'LibCal <alerts@mail.libcal.com>'
-               
-    #opens file with necessary information		
-    f = open('library_room.txt', 'r')
+    successful_users = set()
 
     #request timeslots 
-    for k in range(NUM_USERS):
+    for k, key in enumerate(USERS):
         #initialize our driver called web and use chrome to open up library booking link
         
         if (HEADLESS):
@@ -65,12 +62,10 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
             web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION)
 
         #reads first line which is the Net ID (need to get rid of '\n' character)
-        login_id_noadd = f.readline()
-        login_id_noadd = login_id_noadd.rstrip('\n')
+        login_id_noadd = key
 
         #reads second line which is the users login password (need to get rid of '\n' character)
-        login_pwd = f.readline()
-        login_pwd = login_pwd.rstrip('\n')
+        login_pwd = USERS[key]
 
         #email id
         email_login_id = login_id_noadd + UCSB_ADD
@@ -183,7 +178,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
         #on Jan 01 2018 for 11am. From here it is simply
         #a matter of adding a multiple of 816 per day since that day.
         REFERENCE_TIMESLOT = 11 # our reference timeslot was for 11am
-        REFERENCE_TIMESLOT_ID = 600893789 + 2*(TARGET_TIMESLOT - REFERENCE_TIMESLOT)
+        REFERENCE_TIMESLOT_ID = 600893789 + 2*(TARGET_TIMESLOT - REFERENCE_TIMESLOT) + ROOM_OFFSET
         
         #perform basic arithmetic and cast as strings to later use when searching
         #xpath to decide what grid boxes to click 
@@ -245,7 +240,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
         #click submit
         submit = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="s-lc-rm-sub"]')))
         submit.click()
-        time.sleep(0.7)
+        time.sleep(0.5)
 
         #enter login credentials and click login
         username = wait.until(EC.presence_of_element_located((By.ID, "username")))
@@ -259,15 +254,23 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
         group_name = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="nick"]')))
         group_name.send_keys('CS nerds')
         sub_booking = wait.until(EC.element_to_be_clickable((By.XPATH,'//*[@id="s-lc-rm-sub"]')))
-        time.sleep(0.7)
         sub_booking.click()
         web.implicitly_wait(1)
+        web.quit()
+        successful_users.add(key)
 
+    for key in successful_users:
+        if (HEADLESS):
+            driver_options = Options()
+            driver_options.add_argument('--headless')
+            driver_options.add_argument('--disable-gpu')
+            web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION, chrome_options=driver_options)
+        else:
+            web = webdriver.Chrome(HARDCODED_DRIVER_LOCATION)
         #wait for the booking to send an email and then execute the following code
         #after 5 minutes 
         logger.info("Waiting to ensure that confirmation email is sent and then accessing it...")
-        time.sleep(10)
-
+        time.sleep(10)  
         #open up a mail session with our IMTP_ADD and login then look at inbox
         mail = imaplib.IMAP4_SSL(IMTP_ADD)
 
@@ -276,7 +279,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
             # search at most twice for a confirmation email
             for i in range(2):
                 try:
-                    mail.login(email_login_id, login_pwd)
+                    mail.login(key + UCSB_ADD, USERS[key])
                     mail.select('inbox')
 
                     search_subject = 'Please confirm your booking!'
@@ -331,38 +334,8 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, NUM_USERS=1, RESET_BOOK
         mail.close()
         mail.logout()
         web.quit()
-    f.close()
 
-def main():    
-    # -- change this to the number of people whose credentials will be used --
-    NUM_USERS = 6
-
-    #input credentials
-    #enters if file does not already exist and prompts user to enter necessary info to run program
-    if (os.path.isfile('library_room.txt') == False):
-        f = open('library_room.txt', 'w')
-        for k in range(NUM_USERS):            
-            login_id_noadd = input("Please enter your Net ID (without the .umail extension): ")
-            login_id_noadd_check = input("Please enter your Net ID again to confirm: ")
-            while (login_id_noadd != login_id_noadd_check):
-                print("Error the two Net ID's do not match. Please try again\n")
-                login_id_noadd = input("Please enter your Net ID (without the umail extension): ")
-                login_id_noadd_check = input("Please enter your Net ID again to confirm: ")
-            
-            login_pwd = input("Please enter your Net ID password: ")
-            login_pwd_check = input("Please enter your password again to confirm: ")
-            while (login_pwd != login_pwd_check):
-                print("Error the two passwords do not match. Please try again\n")
-                login_pwd = input("Please enter your Net ID password: ")
-                login_pwd_check = input("Please enter your password again to confirm: ")
-        
-            #write the answers to the prompts line by line
-            f.write(login_id_noadd + '\n')
-            f.write(login_pwd + '\n')
-            if (k == NUM_USERS):
-                f.close()
-        #parameters
-   
+def main(users):    
     lower_bound = 14 #inclusive
     upper_bound = 14 #inclusive
     starting_timeslot = 11 #specify the timeslot you want to start reserving a block of time from e.g. 11am
@@ -380,15 +353,23 @@ def main():
     # -- Otherwise set it to 'path/to/your/chromedriver.exe'
     HARDCODED_DRIVER_LOCATION = "chromedriver"
 
-    global web
+    room_offset = 0
+
+    # global web
     web = None
     try:
         for days_in_advance in range(lower_bound, upper_bound + 1):
-            run(days_in_advance, starting_timeslot, NUM_USERS, RESET_BOOKINGS, CANCEL_TIME_WINDOW, HEADLESS, HARDCODED_DRIVER_LOCATION)
+            run(days_in_advance, starting_timeslot, users, RESET_BOOKINGS, CANCEL_TIME_WINDOW, HEADLESS, HARDCODED_DRIVER_LOCATION, room_offset)
     except Exception as e:
         logger.error("Something happened: " + str(e), exc_info=True)
     finally:
         if (web):
             web.quit()
 
-main()
+if __name__ == '__main__':
+    import multiprocessing
+    import login_info
+    # users = [{key : login_info.users[key]} for key in login_info.users]
+    # p = multiprocessing.Pool(len(login_info.users))
+    # p.map(main, users)
+    main(login_info.users)
