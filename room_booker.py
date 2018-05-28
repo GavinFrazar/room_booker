@@ -41,7 +41,7 @@ def getEmailDateTime(unformatted_date):
     return datetime.fromtimestamp(email.utils.mktime_tz(email.utils.parsedate_tz(unformatted_date)))
 
 def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKINGS=False, CANCEL_TIME_WINDOW=1, HEADLESS=False, HARDCODED_DRIVER_LOCATION="chromedriver", ROOM_OFFSET=0):
-    # global web
+    global web
     global logger
     UCSB_ADD = "@umail.ucsb.edu"
     IMTP_ADD = "outlook.office365.com"
@@ -355,7 +355,7 @@ def main(users):
 
     room_offset = 0
 
-    # global web
+    global web
     web = None
     try:
         for days_in_advance in range(lower_bound, upper_bound + 1):
