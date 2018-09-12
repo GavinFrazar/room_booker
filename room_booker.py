@@ -317,7 +317,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
             #is a confirmation email gather the link and clean it up
             #so that it can be opened up and accessed.
             if email_subject == search_subject and email_from == LIBCAL_EMAIL_ADDRESS and isRecent:
-                logger.info('payload: ' + str(msg.get_payload(1)))
+                # logger.info('payload: ' + str(msg.get_payload(1)))
                 confirm_link = re.search("https://(.+?)\"", str(msg.get_payload(1)))
                 logger.info('Found confirm link: ' + str(confirm_link))
                 unclean_link = str(confirm_link.groups(0))
