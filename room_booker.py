@@ -43,9 +43,9 @@ def getEmailDateTime(unformatted_date):
 def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKINGS=False, CANCEL_TIME_WINDOW=1, HEADLESS=False, HARDCODED_DRIVER_LOCATION="chromedriver", ROOM_OFFSET=0):
     global web
     global logger
-    UCSB_ADD = "@umail.ucsb.edu"
-    IMTP_ADD = "outlook.office365.com"
-    IMTP_PORT = 993
+    UCSB_ADD = "@ucsb.edu"
+    IMTP_ADD = "imap.gmail.com"
+    #IMTP_PORT = 993
     LIBCAL_EMAIL_ADDRESS = 'LibCal <alerts@mail.libcal.com>'
     successful_users = set()
 
@@ -159,7 +159,8 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         #initialize the day of reference. This is important, because every number
         #on the reservation grid is determined based on the numbers found on this
         #day in the html file
-        day_reference = datetime(2018,1,17)
+        day_reference = datetime(2018,9,24)
+        timeslot_on_day_reference = 641213759
 
         #dt is initialized to 14 days in advance (the soonest we can reserve a 
         #room) and then it is added to the current day
@@ -170,7 +171,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         #datetime objects will allow us to determine how many days it has been
         #and thus how much to multiply each value by
         numday_difference = booking_datetime - day_reference
-
+        logger.info('It has been ' + str(numday_difference) + ' since day of reference (' + str(day_reference) +')')
         #the beginning timeslot of the 2 hours we want to book
         TARGET_TIMESLOT = STARTING_TIMESLOT + 2*k
 
@@ -178,7 +179,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         #on Jan 01 2018 for 11am. From here it is simply
         #a matter of adding a multiple of 816 per day since that day.
         REFERENCE_TIMESLOT = 11 # our reference timeslot was for 11am
-        REFERENCE_TIMESLOT_ID = 600893789 + 2*(TARGET_TIMESLOT - REFERENCE_TIMESLOT) + ROOM_OFFSET
+        REFERENCE_TIMESLOT_ID = timeslot_on_day_reference + 2*(TARGET_TIMESLOT - REFERENCE_TIMESLOT) + ROOM_OFFSET
         
         #perform basic arithmetic and cast as strings to later use when searching
         #xpath to decide what grid boxes to click 
@@ -277,7 +278,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         #confirm emails
         try:
             # search at most twice for a confirmation email
-            for i in range(2):
+            for _ in range(2):
                 try:
                     mail.login(key + UCSB_ADD, USERS[key])
                     mail.select('inbox')
@@ -293,6 +294,8 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
                     id_list = mail_ids.split()
                     latest_email_id = int(id_list[-1])
                 except:
+                    mail.close()
+                    mail.logout()
                     logger.warning("Could not find confirm email. Waiting before retry")
                     time.sleep(20)
                     logger.info('Retrying search for confirm email')
@@ -301,7 +304,6 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
 
             #check latest email to see if it came
             typ, data = mail.fetch(str(latest_email_id),'(RFC822)')
-            
             #The confirmation email will be a multipart message 
             msg = email.message_from_string(data[0][1].decode())
             email_subject = msg['subject']
@@ -314,8 +316,10 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
             #all confirmation emails follow this structure so if it
             #is a confirmation email gather the link and clean it up
             #so that it can be opened up and accessed.
-            if email_subject == search_subject and email_from == 'LibCal <alerts@mail.libcal.com>' and isRecent:
-                confirm_link = re.search("http://(.+?)\"", str(msg.get_payload(1)))
+            if email_subject == search_subject and email_from == LIBCAL_EMAIL_ADDRESS and isRecent:
+                logger.info('payload: ' + str(msg.get_payload(1)))
+                confirm_link = re.search("https://(.+?)\"", str(msg.get_payload(1)))
+                logger.info('Found confirm link: ' + str(confirm_link))
                 unclean_link = str(confirm_link.groups(0))
                 unclean_link = unclean_link.replace("'",'')
                 unclean_link = unclean_link.replace("(",'')
