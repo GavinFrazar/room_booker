@@ -344,7 +344,7 @@ def main(users, starting_timeslot):
     upper_bound = 14 #inclusive
 
     # -- set to True if you need to undo recent (today's) bookings for whatever reason -- WARNING: this will cancel ANY recent enough booking, which may be a booking you dont want cancelled
-    RESET_BOOKINGS = True
+    RESET_BOOKINGS = False
 
     # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
     CANCEL_TIME_WINDOW = 1
@@ -376,5 +376,5 @@ if __name__ == '__main__':
     user_number = int(sys.argv[1])
     if user_number < 0 or user_number >= len(login_info.users):
         logger.warning("Invalid user index. Got: " + str(user_number))
-    
-    main(login_info.users[user_number], 11 + 2*user_number)
+    else:
+        main(login_info.users[user_number], 11 + 2*user_number)
