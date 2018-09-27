@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # create a file handler
-handler = logging.FileHandler('output.log')
+handler = logging.FileHandler('output' + sys.argv[1] + '.log')
 handler.setLevel(logging.INFO)
 
 # create a logging format
@@ -101,7 +101,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
                 
                 #get booking confirmed email
                 if email_subject == search_subject and email_from == LIBCAL_EMAIL_ADDRESS and isRecent:
-                    cancel_link = re.search("http://(.+?)\"", str(msg.get_payload(0)))
+                    cancel_link = re.search("https://(.+?)\"", str(msg.get_payload(0)))
                     unclean_link = str(cancel_link.groups(0))
                     unclean_link = unclean_link.replace("'",'')
                     unclean_link = unclean_link.replace("(",'')
@@ -159,8 +159,8 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         #initialize the day of reference. This is important, because every number
         #on the reservation grid is determined based on the numbers found on this
         #day in the html file
-        day_reference = datetime(2018,9,24)
-        timeslot_on_day_reference = 641213759
+        day_reference = datetime(2018,9,28)
+        timeslot_on_day_reference = 647733591
 
         #dt is initialized to 14 days in advance (the soonest we can reserve a 
         #room) and then it is added to the current day
@@ -171,7 +171,7 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         #datetime objects will allow us to determine how many days it has been
         #and thus how much to multiply each value by
         numday_difference = booking_datetime - day_reference
-        logger.info('It has been ' + str(numday_difference) + ' since day of reference (' + str(day_reference) +')')
+        logger.info('Booking date is ' + str(numday_difference) + ' from day of reference (' + str(day_reference) +')')
         #the beginning timeslot of the 2 hours we want to book
         TARGET_TIMESLOT = STARTING_TIMESLOT + 2*k
 
@@ -275,12 +275,13 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         #open up a mail session with our IMTP_ADD and login then look at inbox
         mail = imaplib.IMAP4_SSL(IMTP_ADD)
 
+        email_login_id = key + UCSB_ADD
         #confirm emails
         try:
             # search at most twice for a confirmation email
             for _ in range(2):
                 try:
-                    mail.login(key + UCSB_ADD, USERS[key])
+                    mail.login(email_login_id, USERS[key])
                     mail.select('inbox')
 
                     search_subject = 'Please confirm your booking!'
@@ -319,7 +320,6 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
             if email_subject == search_subject and email_from == LIBCAL_EMAIL_ADDRESS and isRecent:
                 # logger.info('payload: ' + str(msg.get_payload(1)))
                 confirm_link = re.search("https://(.+?)\"", str(msg.get_payload(1)))
-                logger.info('Found confirm link: ' + str(confirm_link))
                 unclean_link = str(confirm_link.groups(0))
                 unclean_link = unclean_link.replace("'",'')
                 unclean_link = unclean_link.replace("(",'')
@@ -339,13 +339,12 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         mail.logout()
         web.quit()
 
-def main(users):    
+def main(users, starting_timeslot):    
     lower_bound = 14 #inclusive
     upper_bound = 14 #inclusive
-    starting_timeslot = 11 #specify the timeslot you want to start reserving a block of time from e.g. 11am
 
     # -- set to True if you need to undo recent (today's) bookings for whatever reason -- WARNING: this will cancel ANY recent enough booking, which may be a booking you dont want cancelled
-    RESET_BOOKINGS = False
+    RESET_BOOKINGS = True
 
     # -- Bookings older than this time window (in hours) will not be auto cancelled on bookings reset
     CANCEL_TIME_WINDOW = 1
@@ -373,7 +372,9 @@ def main(users):
 if __name__ == '__main__':
     import multiprocessing
     import login_info
-    # users = [{key : login_info.users[key]} for key in login_info.users]
-    # p = multiprocessing.Pool(len(login_info.users))
-    # p.map(main, users)
-    main(login_info.users)
+
+    user_number = int(sys.argv[1])
+    if user_number < 0 or user_number >= len(login_info.users):
+        logger.warning("Invalid user index. Got: " + str(user_number))
+    
+    main(login_info.users[user_number], 11 + 2*user_number)
