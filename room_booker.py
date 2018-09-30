@@ -339,7 +339,16 @@ def run(NUM_OF_DAYS_IN_ADVANCE=14, STARTING_TIMESLOT=11, USERS=None, RESET_BOOKI
         mail.logout()
         web.quit()
 
-def main(users, starting_timeslot):    
+def main(argv):
+    import login_info
+    import getopt
+
+    user_number = int(argv[0])
+    if user_number < 0 or user_number >= len(login_info.users):
+        logger.warning("Invalid user index. Got: " + str(user_number))
+        return
+    users = login_info.users[user_number]
+    earliest_timeslot = 11
     lower_bound = 14 #inclusive
     upper_bound = 14 #inclusive
 
@@ -358,6 +367,32 @@ def main(users, starting_timeslot):
 
     room_offset = 0
 
+    opts, args = getopt.getopt(argv[1:], "", ['earliest-time=', 'from=','to=', 'room=', 'headless=', 'reset'])
+    print(opts)
+
+    rooms = {
+    '2528' : 0
+
+    }
+    for opt, arg in opts:
+        if opt == '--earliest-time':
+            earliest_timeslot = int(arg)
+        elif opt == '--from':
+            lower_bound = int(arg)
+        elif opt == '--to':
+            upper_bound = int(arg)
+        elif opt == '--room':
+            room_offset = rooms[arg]
+        elif opt == '--headless':
+            if arg.lower() == 'true':
+                HEADLESS = True
+            else:
+                HEADLESS = False
+        elif opt == '--reset':
+            RESET_BOOKINGS = True
+        
+    starting_timeslot = earliest_timeslot + 2*user_number   
+
     global web
     web = None
     try:
@@ -370,11 +405,5 @@ def main(users, starting_timeslot):
             web.quit()
 
 if __name__ == '__main__':
-    import multiprocessing
-    import login_info
-
-    user_number = int(sys.argv[1])
-    if user_number < 0 or user_number >= len(login_info.users):
-        logger.warning("Invalid user index. Got: " + str(user_number))
-    else:
-        main(login_info.users[user_number], 11 + 2*user_number)
+    import sys
+    main(sys.argv[1:])
