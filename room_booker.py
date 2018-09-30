@@ -370,10 +370,31 @@ def main(argv):
     opts, args = getopt.getopt(argv[1:], "", ['earliest-time=', 'from=','to=', 'room=', 'headless=', 'reset'])
     print(opts)
 
-    rooms = {
-    '2528' : 0
+    rooms = [
+        '2308',
+        '2310',
+        '2312',
+        '2314',
+        '2316',
+        '2318',
+        '2326',
+        '2328',
+        '2330',
+        '2332',
+        '2334',
+        '2336',
+        '2338',
+        '2501',
+        '2503',
+        '2528',
+        '2574'
+    ]
 
-    }
+    room_offsets = {}
+    for i, room in enumerate(rooms[:-1]):
+        room_offsets[room] = -1*((len(rooms) - 2)*48) + i*48
+    room_offsets['2574'] = 945487 #why? libcal is weird.
+    
     for opt, arg in opts:
         if opt == '--earliest-time':
             earliest_timeslot = int(arg)
@@ -382,7 +403,7 @@ def main(argv):
         elif opt == '--to':
             upper_bound = int(arg)
         elif opt == '--room':
-            room_offset = rooms[arg]
+            room_offset = room_offsets[arg]
         elif opt == '--headless':
             if arg.lower() == 'true':
                 HEADLESS = True
